@@ -9,6 +9,7 @@ package org.cloudsimplus.brokers;
 import org.cloudsimplus.cloudlets.Cloudlet;
 import org.cloudsimplus.core.SimEntity;
 import org.cloudsimplus.datacenters.Datacenter;
+import org.cloudsimplus.gpu_cluster_simulator.Job;
 import org.cloudsimplus.listeners.DatacenterBrokerEventInfo;
 import org.cloudsimplus.listeners.EventInfo;
 import org.cloudsimplus.listeners.EventListener;
@@ -476,4 +477,10 @@ public interface DatacenterBroker extends SimEntity {
      * @see #isBatchVmCreation()
      */
     DatacenterBroker setBatchVmCreation(boolean enable);
+
+    /**
+     * 如果与之相关的Vm创建失败，则从Broker.getCloudletWaitingList中撤回job
+     * @param vm 要撤回的Vm
+     */
+    Job withdrawJobFromWaitingList(Vm vm);
 }

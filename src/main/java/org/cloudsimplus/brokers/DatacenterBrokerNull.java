@@ -27,6 +27,7 @@ import org.cloudsimplus.cloudlets.Cloudlet;
 import org.cloudsimplus.core.SimEntity;
 import org.cloudsimplus.core.SimEntityNullBase;
 import org.cloudsimplus.datacenters.Datacenter;
+import org.cloudsimplus.gpu_cluster_simulator.Job;
 import org.cloudsimplus.listeners.DatacenterBrokerEventInfo;
 import org.cloudsimplus.listeners.EventInfo;
 import org.cloudsimplus.listeners.EventListener;
@@ -85,6 +86,12 @@ final class DatacenterBrokerNull implements DatacenterBroker, SimEntityNullBase 
     @Override public Datacenter getLastSelectedDc() { return Datacenter.NULL; }
     @Override public boolean isBatchVmCreation() { return false; }
     @Override public DatacenterBroker setBatchVmCreation(boolean enable) { return this; }
+
+    @Override
+    public Job withdrawJobFromWaitingList(Vm vm) {
+        return null;
+    }
+
     @Override public boolean isShutdownWhenIdle() { return false; }
     @Override public DatacenterBroker setShutdownWhenIdle(boolean shutdownWhenIdle) { return this; }
     @Override public DatacenterBroker setVmComparator(Comparator<Vm> comparator) { return this; }

@@ -20,6 +20,7 @@ import org.cloudsimplus.core.events.CloudSimEvent;
 import org.cloudsimplus.core.events.SimEvent;
 import org.cloudsimplus.datacenters.Datacenter;
 import org.cloudsimplus.datacenters.TimeZoned;
+import org.cloudsimplus.gpu_cluster_simulator.Job;
 import org.cloudsimplus.listeners.DatacenterBrokerEventInfo;
 import org.cloudsimplus.listeners.EventInfo;
 import org.cloudsimplus.listeners.EventListener;
@@ -670,6 +671,29 @@ public abstract class DatacenterBrokerAbstract extends CloudSimEntity implements
         }
 
         return createdVms > 0;
+    }
+
+    /**
+     * 从 getCloudletWaitingList 中删除 vm 相关的 Cloudlets
+     * @param vm 要撤回的Vm
+     */
+    public Job withdrawJobFromWaitingList(Vm vm) {
+        for (var l : getCloudletWaitingList()){
+            if (l.getVm() == vm) {
+//                System.out.println("Cloudlet_" + l.getId() + " 需要GPU: " + l.getPesNumber() + "; 由于资源不足，作业从集群中撤回！");
+//                System.out.println("Host_ID\tTotal_GPU\tIdle_GPU");
+                int freeGpu = 0;
+                Datacenter dc = this.getDatacenterList().get(0);
+                for (var host : dc.getHostList()) {
+//                    System.out.println("   " + host.getId() + "\t\t" + host.getPesNumber() + "\t\t\t" + host.getFreePesNumber());
+                    freeGpu += host.getFreePesNumber();
+                }
+                System.out.printf("Fragment rate: %.2f%%\n", (double)freeGpu / (dc.getActiveHostsNumber()*dc.getHost(0).getPesNumber()));
+                getCloudletWaitingList().remove(l);
+                return l.getGpuJob();
+            }
+        }
+        return null;
     }
 
     /**
