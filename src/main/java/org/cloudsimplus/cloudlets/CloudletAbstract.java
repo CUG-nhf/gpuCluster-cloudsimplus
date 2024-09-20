@@ -16,6 +16,7 @@ import org.cloudsimplus.brokers.DatacenterBroker;
 import org.cloudsimplus.core.CloudSimTag;
 import org.cloudsimplus.core.CustomerEntityAbstract;
 import org.cloudsimplus.datacenters.Datacenter;
+import org.cloudsimplus.gpu_cluster_simulator.Job;
 import org.cloudsimplus.listeners.CloudletVmEventInfo;
 import org.cloudsimplus.listeners.EventListener;
 import org.cloudsimplus.resources.*;
@@ -535,5 +536,15 @@ public abstract class CloudletAbstract extends CustomerEntityAbstract implements
     @Override
     public void shutdown() {
         throw new UnsupportedOperationException("This method is not implemented for Cloudlet yet");
+    }
+
+    @Setter @Getter
+    protected Job Gpujob;
+
+    public double getJCT() {
+        if (!this.isFinished()) {
+            return -1;  // -1 表示job还没有完成
+        }
+        return getFinishTime() - Gpujob.getArrival_time();
     }
 }

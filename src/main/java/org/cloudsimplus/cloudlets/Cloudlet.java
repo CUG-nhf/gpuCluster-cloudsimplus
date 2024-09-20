@@ -8,6 +8,7 @@ package org.cloudsimplus.cloudlets;
 
 import org.cloudsimplus.brokers.DatacenterBroker;
 import org.cloudsimplus.core.*;
+import org.cloudsimplus.gpu_cluster_simulator.Job;
 import org.cloudsimplus.listeners.CloudletVmEventInfo;
 import org.cloudsimplus.listeners.EventListener;
 import org.cloudsimplus.resources.ResourceManageable;
@@ -757,4 +758,11 @@ public interface Cloudlet extends UniquelyIdentifiable, Comparable<Cloudlet>, Cu
      */
     @Override
     ExecDelayable setShutDownDelay(double delay);
+
+    /**
+     *  在GPU cluster simulation中，获取此cloudlet表示的Job
+     */
+    Job getGpuJob();
+    void setGpuJob(Job gpuJob);
+    double getJCT();
 }

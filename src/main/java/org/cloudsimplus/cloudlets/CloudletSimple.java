@@ -9,6 +9,7 @@ package org.cloudsimplus.cloudlets;
 
 import lombok.NonNull;
 import org.cloudsimplus.brokers.DatacenterBroker;
+import org.cloudsimplus.gpu_cluster_simulator.Job;
 import org.cloudsimplus.utilizationmodels.UtilizationModel;
 import org.cloudsimplus.utilizationmodels.UtilizationModelFull;
 import org.cloudsimplus.vms.Vm;
@@ -114,5 +115,15 @@ public class CloudletSimple extends CloudletAbstract {
         return Double.compare(getLength(), other.getLength()) +
             Long.compare(this.getId(), other.getId()) +
             this.getBroker().compareTo(other.getBroker());
+    }
+
+    @Override
+    public Job getGpuJob() {
+        return this.Gpujob;
+    }
+
+    @Override
+    public void setGpuJob(Job gpuJob) {
+        this.Gpujob = gpuJob;
     }
 }

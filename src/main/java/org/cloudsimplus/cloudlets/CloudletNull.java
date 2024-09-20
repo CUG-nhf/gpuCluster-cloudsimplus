@@ -29,6 +29,7 @@ import org.cloudsimplus.core.ExecDelayable;
 import org.cloudsimplus.core.Simulation;
 import org.cloudsimplus.core.Startable;
 import org.cloudsimplus.datacenters.Datacenter;
+import org.cloudsimplus.gpu_cluster_simulator.Job;
 import org.cloudsimplus.listeners.CloudletVmEventInfo;
 import org.cloudsimplus.listeners.EventListener;
 import org.cloudsimplus.resources.ResourceManageable;
@@ -148,4 +149,18 @@ final class CloudletNull implements Cloudlet {
     @Override public ExecDelayable setStartupDelay(double delay) { return this; }
     @Override public double getShutDownDelay() { return 0; }
     @Override public ExecDelayable setShutDownDelay(double delay) { return this; }
+
+    @Override
+    public Job getGpuJob() {
+        return null;
+    }
+
+    @Override
+    public void setGpuJob(Job gpuJob) {
+    }
+
+    @Override
+    public double getJCT() {
+        return 0;
+    }
 }
