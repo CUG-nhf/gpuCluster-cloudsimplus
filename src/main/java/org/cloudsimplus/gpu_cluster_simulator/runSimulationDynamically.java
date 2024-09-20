@@ -9,6 +9,8 @@ import org.cloudsimplus.cloudlets.CloudletSimple;
 import org.cloudsimplus.core.CloudSimPlus;
 import org.cloudsimplus.datacenters.Datacenter;
 import org.cloudsimplus.datacenters.DatacenterSimple;
+import org.cloudsimplus.distributions.ContinuousDistribution;
+import org.cloudsimplus.distributions.DiscreteDistribution;
 import org.cloudsimplus.distributions.UniformDistr;
 import org.cloudsimplus.distributions.PoissonDistr;
 import org.cloudsimplus.hosts.Host;
@@ -33,8 +35,7 @@ public class runSimulationDynamically {
     private static final long JOB_QUEUE_SCHEDULING_INTERVAL_SECONDS = 60;
     private static final int JOB_NUMBER_PER_SCHEDULING_INTERVAL = 2;
 
-    private static final String JOB_SELECTION_POLICY = "FIFO";
-//    private static final String JOB_SELECTION_POLICY = "SJF";
+    private static final JobScheduler jobSelectionPolicy = new JobScheduler(JobScheduler.JobSelectionPolicy.SJF);
 
     private static final int  HOSTS = 10;
     private static final int  HOST_PES = 8;
@@ -45,11 +46,10 @@ public class runSimulationDynamically {
 
     private final CloudSimPlus simulation;
     private final DatacenterBroker broker;
-    private final List<Cloudlet> cloudletList = new ArrayList<>();
-    private final List<Job> jobs = getAllJobs(JOB_TRACE_FILE_PATH);
+    private int cloudletID = 0;
 
-    private final UniformDistr uniform =  new UniformDistr(112717614L);
-    private final PoissonDistr poisson = new PoissonDistr(0.01, 11271713L);
+    private final UniformDistr jobTypeGenerator =  new UniformDistr(112717614L);
+    private final PoissonDistr jobArriveTimeGenerator = new PoissonDistr(0.01, 11271713L);
     private double nextJobArrivalTime = 0;
     private long total_finished_job_num = 0;
     private final List<Job> job_queue = new ArrayList<>();
@@ -63,19 +63,24 @@ public class runSimulationDynamically {
 
         simulation = new CloudSimPlus();
         simulation.terminateAt(TIME_TO_TERMINATE_SIMULATION);
-        simulation.addOnClockTickListener(this::createRandomCloudlets);
+        simulation.addOnClockTickListener(this::simulationTimeListener);
 
         Datacenter datacenter0 = createDatacenter();
         broker = new DatacenterBrokerSimple(simulation);
         simulation.start();
 
-        final var cloudletFinishedList = broker.getCloudletFinishedList();
-        new CloudletsTableBuilder(broker.getCloudletFinishedList()).build();
-        System.out.println("Total finished Job number: " + total_finished_job_num);
 
+//        new CloudletsTableBuilder(broker.getCloudletSubmittedList()).build();
+        System.out.println("Total finished Job number: " + total_finished_job_num);
+        final var cloudletFinishedList = broker.getCloudletFinishedList();
         double sum = cloudletFinishedList.stream().mapToDouble(Cloudlet::getJCT).sum();
         System.out.printf("Average JCT: %.2f\n", sum / cloudletFinishedList.size());
 
+    }
+
+    // 从trace中获取所有的job类型，后期可能自定义job总类，所以这里先写个函数获取总jobs
+    private List<Job> getAllJobs() {
+        return new ReadJobTrace(JOB_TRACE_FILE_PATH).getJobs();
     }
 
     private Datacenter createDatacenter() {
@@ -85,11 +90,12 @@ public class runSimulationDynamically {
             hostList.add(host);
         }
 
-        // 作业部署到哪台服务器上的算法，在这里修改
-        VmAllocationPolicy policy = new VmAllocationPolicyFirstFit();
+        // 作业部署算法
+        // TODO 在cloudsim plus中放置和整理是一个整体，都在migrationPolicy中，但是在我们的gpu碎片整理设计中，这俩是分开的；下一步是想办法适配
+//        VmAllocationPolicy policy = new VmAllocationPolicyFirstFit();
 //        VmAllocationPolicy policy = new VmAllocationPolicyBestFit();
 //        VmAllocationPolicy policy = new VmAllocationPolicyRandom(new UniformDistr(19991202L));
-//        VmAllocationPolicy policy = new VmAllocationPolicyRoundRobin();
+        VmAllocationPolicy policy = new VmAllocationPolicyRoundRobin();
 
         Datacenter dc = new DatacenterSimple(simulation, hostList, policy);
         dc.setSchedulingInterval(1);
@@ -106,29 +112,26 @@ public class runSimulationDynamically {
         return new HostSimple(HOST_RAM, HOST_BW, HOST_STORAGE, peList);
     }
 
-    private List<Job> getAllJobs(String filePath) {
-        return new ReadJobTrace(filePath).getJobs();
-    }
-
     private void createCloudlet(Job job) {
         // 1. 创建作业
         var job_id = job.getJobId();
         int job_gpu_num = job.getNum_gpu();
         long job_duration = job.getDuration();
-        final var cloudlet = new CloudletSimple(job_id, job_duration, job_gpu_num);
+        final var cloudlet = new CloudletSimple(cloudletID, job_duration, job_gpu_num);
         cloudlet.addOnFinishListener(this::whenCloudletFinished);
         // 为cloudlet添加属性，arrival time表示作业达到等待队列的时间，后期用于计算作业再等待队列中的等待时间
         cloudlet.setGpuJob(job);
-        cloudletList.add(cloudlet);
 
         // 2. 为这个作业创建Vm
-        final Vm vm = new VmSimple(job_id, 1, job_gpu_num);
+        final Vm vm = new VmSimple(cloudletID, 1, job_gpu_num);
         vm.setRam(512).setBw(1000).setSize(10_000);
         vm.addOnCreationFailureListener(this::whenVmCreationFailed);
 
         broker.bindCloudletToVm(cloudlet, vm);
         broker.submitCloudlet(cloudlet);
         broker.submitVm(vm);
+
+        cloudletID ++;
     }
 
     // 如果job完成，则删除job所在的虚拟机
@@ -143,55 +146,43 @@ public class runSimulationDynamically {
         Job job = broker.withdrawJobFromWaitingList(event.getVm());
         job_queue.add(job);
     }
+
     /**
-     *  在这个函数里可以实现从作业队列里选择作业提交的算法
+     * 随机生成一个具体的作业，并加入到job_queue中
+     * @param currentTime 作业到达时间
+     * @param jobArriveTimeGenerator 作业到达时间随机生成器，用于生产下一次作业到达间隔
+     * @param jobTypeGenerator 作业类型随机生成器，在所有作业类型（例如60_job.csv）中选择一个具体的作业，作为此次达到的作业
      */
-    private void selectJobFromQueueToExecute() {
-        if (job_queue.isEmpty()) {
-            return;
-        }
-        if (JOB_SELECTION_POLICY == "FIFO") {
-            createCloudlet(job_queue.get(0));
-            job_queue.remove(0);
-        }
-        if (JOB_SELECTION_POLICY == "SJF") {
-            Job minDurationJob = null;
-            double minDuration = Double.MAX_VALUE;
-            for (Job job : job_queue) {
-                if (job.getDuration() < minDuration) {
-                    minDuration = job.getDuration();
-                    minDurationJob = job;
-                }
-            }
+    private void generateJobToQueue(final double currentTime,
+                                    DiscreteDistribution jobArriveTimeGenerator,
+                                    ContinuousDistribution jobTypeGenerator) {
+        final List<Job> all_jobs = getAllJobs();
 
-            if (minDurationJob != null) {
-                createCloudlet(minDurationJob);
-                job_queue.remove(minDurationJob);
-            }
-        }
-
-    }
-
-    private void generateJobToQueue(final double currentTime) {
-        int jobIndex = (int) (uniform.sample() * jobs.size());
-        Job tmp_job = new Job(jobs.get(jobIndex));
+        int jobIndex = (int) (jobTypeGenerator.sample() * all_jobs.size());
+        Job tmp_job = new Job(all_jobs.get(jobIndex));
         tmp_job.setArrival_time(currentTime);
         job_queue.add(tmp_job);
-        nextJobArrivalTime = poisson.sample() + currentTime;
+        nextJobArrivalTime = jobArriveTimeGenerator.sample() + currentTime;
     }
 
-    private void createRandomCloudlets(EventInfo eventInfo) {
+    private void simulationTimeListener(EventInfo eventInfo) {
+        // 1. 如果达到nextJobArrivalTime时，生产新的到达Job
         if ((int)eventInfo.getTime() == (int) nextJobArrivalTime) {
-            int n = 2;
+            int n = 4;
             while (n > 0) {
-                generateJobToQueue(eventInfo.getTime());
+                generateJobToQueue(eventInfo.getTime(),jobArriveTimeGenerator,jobTypeGenerator);
                 n --;
             }
         }
+
+        // 2. 如果时间到达调度间隔，则从job_queue中选择作业提交到集群
         if ((int) eventInfo.getTime() % JOB_QUEUE_SCHEDULING_INTERVAL_SECONDS == 0) {
-//            System.out.println(job_queue.size());
             for (var i = 0; i < JOB_NUMBER_PER_SCHEDULING_INTERVAL; i ++) {
-                selectJobFromQueueToExecute();
+                // 执行作业选择算法，从job_queue中选择作业然后提交
+                Job job = jobSelectionPolicy.selectJob(job_queue);
+                if (job != null) {
+                    createCloudlet(job);
+                }
             }
         }
     }
