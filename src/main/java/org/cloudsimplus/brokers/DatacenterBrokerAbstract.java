@@ -688,8 +688,9 @@ public abstract class DatacenterBrokerAbstract extends CloudSimEntity implements
 //                    System.out.println("   " + host.getId() + "\t\t" + host.getPesNumber() + "\t\t\t" + host.getFreePesNumber());
                     freeGpu += host.getFreePesNumber();
                 }
-                System.out.printf("Fragment rate: %.2f%%\n", (double)freeGpu / (dc.getActiveHostsNumber()*dc.getHost(0).getPesNumber()));
+                System.out.printf("Fragment rate: %.2f%%\n", (double)freeGpu / (dc.getActiveHostsNumber()*dc.getHost(0).getPesNumber()) * 100);
                 getCloudletWaitingList().remove(l);
+                getCloudletSubmittedList().remove(l);
                 return l.getGpuJob();
             }
         }
